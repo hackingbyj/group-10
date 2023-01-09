@@ -1,50 +1,118 @@
-package LAB;
+package jfls;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Scanner;
+import java.util.HashMap;
 
-public class SemanticAnalysis {
-  private List<String> errors;
+import java.util.Scanner;
+import java.util.HashMap;
 
-  public SemanticAnalysis() {
-    this.errors = new ArrayList<>();
-  }
+public class SyntaxAnalyzer {
+    private Token currentToken;
+    private Token previousToken;
+    private Lexer lexer;
+    private Scanner scanner;
+    private HashMap<String, String> symbolTable;
 
-  public List<String> getErrors() {
-    return errors;
-  }
-
-  public void checkVariableDeclaration(String variableName) {
-    // Check if variable has already been declared
-    if (SymbolTable.variableExists(variableName)) {
-      errors.add("Error: variable '" + variableName + "' has already been declared");
-    } else {
-      // Add variable to symbol table
-      SymbolTable.addVariable(variableName);
+    public SyntaxAnalyzer(Lexer lexer) {
+        this.lexer = lexer;
+        scanner = new Scanner(System.in);
+        symbolTable = new HashMap<>();
+        currentToken = lexer.getNextToken();
     }
-  }
 
-  public void checkFunctionDeclaration(String functionName) {
-    // Check if function has already been declared
-    if (SymbolTable.functionExists(functionName)) {
-      errors.add("Error: function '" + functionName + "' has already been declared");
-    } else {
-      // Add function to symbol table
-      SymbolTable.addFunction(functionName);
+    public void parse() {
+        program();
+        match("$");
     }
-  }
 
-  public void checkVariableUsage(String variableName) {
-    // Check if variable has been declared
-    if (!SymbolTable.variableExists(variableName)) {
-      errors.add("Error: variable '" + variableName + "' has not been declared");
+    private void program() {
+        match("START");
+        statements();
+        match("END");
     }
-  }
 
-  public void checkFunctionUsage(String functionName) {
-    // Check if function has been declared
-    if (!SymbolTable.functionExists(functionName)) {
-      errors.add("Error: function '" + functionName + "' has not been declared");
+    private void statements() {
+        statement();
+        while (currentToken.getType().equals("ID")) {
+            statement();
+        }
     }
-  }
+
+    private void statement() {
+        String id = currentToken.getValue();
+        match("ID");
+        match("ASSIGN_OP");
+        String type = symbolTable.get(id);
+        if (type == null) {
+        	System.out.println("Error: ID " + id + " has not been declared");
+            System.exit(1);
+        }
+        String expressionType = expression();
+        if (!type.equals(expressionType)) {
+            System.out.println("Error: cannot assign value of type " + expressionType + " to variable of type " + type);
+            System.exit(1);
+        }
+        match("SEMICOLON");
+    }
+    private String expression() {
+        String type = term();
+        return expressionPrime(type);
+    }
+
+    private String expressionPrime(String lhsType) {
+        if (currentToken.getType().equals("ADD_OP")) {
+            match("ADD_OP");
+            String rhsType = term();
+            if (lhsType.equals(rhsType)) {
+                return lhsType;
+            } else if (lhsType.equals("INTEGER") && rhsType.equals("FLOAT")) {
+                return "FLOAT";
+            } else if (lhsType.equals("FLOAT") && rhsType.equals("INTEGER")) {
+                return "FLOAT";
+            } else {
+                System.out.println("Error: cannot perform operation on values of type " + lhsType + " and " + rhsType);
+                System.exit(1);
+            }
+        }
+        return lhsType;
+    }
+    private String term() {
+        String type = null;
+        if (currentToken.getType().equals("ID")) {
+            String id = currentToken.getValue();
+            type = symbolTable.get(id);
+            if (type == null) {
+                System.out.println("Error: ID " + id + " has not been declared");
+                System.exit(1);
+            }
+            match("ID");
+        } else if (currentToken.getType().equals("INTEGER")) {
+            type = "INTEGER";
+            match("INTEGER");
+        } else if (currentToken.getType().equals("FLOAT")) {
+            type = "FLOAT";
+            match("FLOAT");
+        } else {
+            System.out.println("Error: expected ID, INTEGER, or FLOAT, found " + currentToken.getType());
+            System.exit(1);
+        }
+        return type;
+    }
+
+    private void match(String expectedType) {
+        if (currentToken.getType().equals(expectedType)) {
+            previousToken = currentToken;
+            currentToken = lexer.getNextToken();
+        } else {
+            System.out.println("Error: expected " + expectedType + ", found " + currentToken.getType());
+            System.exit(1);
+        }
+    }
+
+    public static void main(String[] args) {
+        String input = "START program TYPE ID declarations ID ADD_OP ID";
+        Lexer lexer = new Lexer(input);
+        SyntaxAnalyzer parser = new SyntaxAnalyzer(lexer);
+        parser.parse();
+    }
 }
